@@ -152,6 +152,7 @@ class GameObject {
 	bullet: Bullet | null = null;
 	effect: Effect | null = null;
 	enemy: Enemy | null = null;
+	collider: Collider | null = null;
 	static autoIncrement = 0;
 
 	constructor() {
@@ -170,8 +171,20 @@ class Effect {
 	time = 0;
 }
 
+class Collider {
+	sprite: Shape;
+	constructor() {
+		var rect = new RectangleShape();
+		rect.width = 32;
+		rect.height = 32;
+		rect.alpha = 0.5;
+		rect.fill = '#ff0000';
+		rect.stroke = '#000000'
+		this.sprite = rect;
+	}
+}
+
 class Bullet {
-	vec = 1;
 }
 
 class Enemy {
@@ -230,7 +243,7 @@ class HogeScene {
 	player: GameObject;
 	goArr: GameObject[] = [];
 	stageLeft = 0;
-	enemyRect = new Rect(-16, -16, DF.SC_W + 32, DF.SC_H + 32); 
+	enemyRect = new Rect(-16, -16, DF.SC_W + 32, DF.SC_H + 32);
 	stageRight = 32;
 	isStarted = false;
 	isEnd = false;
@@ -282,36 +295,24 @@ class HogeScene {
 	questWaveEnemyIndex = 0;
 	questLoopCount = 0;
 	questTime = 0;
+	score = 0;
+	questTimeDuration = 60 * 1000;
 
 	constructor(pScene: phina.display.DisplayScene) {
 		this.scene = pScene;
 		pScene.backgroundColor = '#ff00ff';
-		{
-			const go = new GameObject();
-			go.name = 'player';
-			go.type = GameObjectType.PLAYER;''
-
-			const sprite = Sprite('obj', 96, 96);
-			const fa = FrameAnimation("obj");
-			fa.attachTo(sprite);
-			fa.gotoAndPlay('chara_stand');
-			sprite.addChildTo(this.scene);
-			go.sprite = sprite;
-
-			this.goArr.push(go);
-			this.player = go;
-		}
+		this.player = this.createPlayer();
 
 		{
 			var label = new phina.display.Label({
-				text: '',
-				fill: '#00ff00',
-				fontSize: '12',
+				text: 'hoge',
+				fill: '#ffffff',
+				fontSize: '16',
 				fontFamily: 'monospaced',
 				align: 'left',
 			});
-			label.x = 0;
-			label.y = pScene.gridY.center();
+			label.x = 8;
+			label.y = 24;
 			label.addChildTo(pScene);
 			this.mainLabel = label;
 		}
@@ -363,6 +364,24 @@ class HogeScene {
 		return null;
 	}
 
+	createPlayer() {
+		const go = new GameObject();
+		go.name = 'player';
+		go.type = GameObjectType.PLAYER;
+		go.tr.position.x = this.enemyRect.centerX;
+		go.tr.position.y = this.enemyRect.centerY;
+
+		const sprite = Sprite('obj', 96, 96);
+		const fa = FrameAnimation("obj");
+		fa.attachTo(sprite);
+		fa.gotoAndPlay('chara_stand');
+		sprite.addChildTo(this.scene);
+		go.sprite = sprite;
+
+		this.goArr.push(go);
+		return go;
+	}
+
 	createStone(quest: HogeScene, app: GameApp) {
 		const go = new GameObject();
 		go.name = 'stone';
@@ -376,7 +395,7 @@ class HogeScene {
 		go.sprite = sprite;
 		this.goArr.push(go);
 		return go;
-	}	
+	}
 
 	createEnemy(quest: HogeScene, app: GameApp, enemyId: string) {
 		const stone = this.createStone(this, app);
@@ -393,12 +412,15 @@ class HogeScene {
 		sprite.addChildTo(this.scene);
 		go.sprite = sprite;
 
+		go.collider = new Collider();
+		go.collider.sprite.addChildTo(this.scene);
+		go.collider.sprite.setPosition(120, 120);
+
 		go.tr.position.x = this.enemyRect.right;
 		go.tr.position.y = this.enemyRect.centerY - 100 + Math.random() * 200;
 
 		go.bullet = new Bullet();
 		var scale = (1 + quest.questLoopCount * 0.5);
-		go.bullet.vec = -enemyData.speed * scale;
 		this.goArr.push(go);
 		return go;
 	}
@@ -535,11 +557,12 @@ class HogeScene {
 			if (!enemy) return;
 			if (go.tr.position.x < myScene.enemyRect.left) {
 				go.tr.position.x = myScene.enemyRect.right;
+				myScene.score += 1;
 				return;
 			}
 
 			var dir = new Vector2(-1, 0);
-			var speed = 100 * app.deltaTime / 1000;
+			var speed = 25 * app.deltaTime / 1000;
 			go.tr.position.x += dir.x * speed;
 			go.tr.position.y += dir.y * speed;
 			go.tr.rotation = Rotation.LEFT;
@@ -548,7 +571,7 @@ class HogeScene {
 				return go.instanceId === enemy.stoneId;
 			});
 			if (!stone) return;
-			stone.tr.position.x = go.tr.position.x - 96;
+			stone.tr.position.x = go.tr.position.x - 64;
 			stone.tr.position.y = go.tr.position.y;
 
 		});
@@ -616,10 +639,18 @@ class HogeScene {
 				sprite.x = go.tr.position.x;
 				sprite.y = go.tr.position.y;
 			});
+			myScene.goArr.forEach((go) => {
+				const collider = go.collider;
+				if (!collider) return;
+				const sprite = collider.sprite;
+				if (!sprite) return;
+				sprite.x = go.tr.position.x;
+				sprite.y = go.tr.position.y;
+			});
 		}
 
 
-		var sprites: AsciiSprite[] = [];
+		var sprites: Sprite[] = [];
 		myScene.goArr.forEach((go) => {
 			if (!go.sprite) return;
 			sprites.push(go.sprite);
@@ -641,16 +672,13 @@ class HogeScene {
 		// 	myScene.lines[0][Math.floor(sprite.position)] = sprite.character;
 		// });
 
-		// var text = '';
-		// for (let i = 0; i < myScene.lines.length; i++) {
-		// 	var line = myScene.lines[i];
-		// 	for (let j = 0; j < 32; j++) {
-		// 		text += line[j];
-		// 	}
-		// 	text += '\n';
-		// }
-		// text += 'loop: ' + myScene.questLoopCount;
-		// myScene.mainLabel.text = text;
+		var restTime = myScene.questTimeDuration - myScene.questTime;
+		var text = '';
+		text += 'score: ' + myScene.score;
+		text += ' time: ' + restTime;
+		text += '\nloop: ' + myScene.questLoopCount;
+		myScene.mainLabel.text = text;
+
 	}
 }
 
