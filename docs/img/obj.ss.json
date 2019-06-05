@@ -12,6 +12,11 @@
 				"frames": [ 0 ],
 				"frequency": 5
 			},
+			"chara_attack": {
+				"frames": [ 1 ],
+				"frequency": 10,
+				"next": "chara_stand"
+			},
 			"chara_push": {
 				"frames": [ 2 ],
 				"frequency": 5
